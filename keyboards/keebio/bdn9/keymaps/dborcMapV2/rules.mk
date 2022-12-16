@@ -1,1 +1,2 @@
 RGB_MATRIX_CUSTOM_USER = yes
+DEBOUNCE_TYPE = sym_defer_pk

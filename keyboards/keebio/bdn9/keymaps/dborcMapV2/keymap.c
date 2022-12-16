@@ -1,13 +1,25 @@
 #include QMK_KEYBOARD_H
 
-#define LIGHT_TIMEOUT 10    // in minutes
-static uint16_t idle_timer = 0;
-static uint8_t halfmin_counter = 0;
-static bool led_on = true;
-static bool light_timer = true;
+static uint32_t light_timeout = 300000; // 5 minutes
+static uint32_t key_timer; // timer for the key
+static void refresh_rgb(void); // refreshes the activity timer and RGB, invoke whenever activity happens
+static void check_rgb_timeout(void); // checks if enough time has passed for RGB to timeout
+static bool is_rgb_timeout = false; // store if RGB has timed out or not in a boolean
+static bool light_timer = true; // store if light timer is enabled or not in a boolean
 
 enum custom_keycodes {
-    AUDIO_OUT, MIC_IN, MIC_MUTE, CONNECT, MIXER, TRIM, DC_MIC, DC_STM, RGB_SWITCH
+    RGB_SWITCH = SAFE_RANGE,
+    AUDIO_OUT, 
+    MIC_IN, 
+    MIC_MUTE, 
+    CONNECT, 
+    MIXER, 
+    TRIM, 
+    DC_MIC, 
+    DC_STM, 
+    RGB_PLUS,
+    RGB_MINUS,
+    LOCKPC
 };
 
 enum layer_names {
@@ -18,6 +30,7 @@ typedef union {
   uint32_t raw;
   struct {
     bool     light_timer_config :1;
+    uint8_t  rgb_timeout_config :5;
   };
 } user_config_t;
 
@@ -36,9 +49,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
     [_MEDIA] = LAYOUT(
      //┌───────────┬───────────┬───────────┐
-        _______    , _______   , _______,
+        RGB_MINUS  , XXXXXXX   , RGB_PLUS,
      //├───────────┼───────────┼───────────┤
-        _______    , _______   , KC_MUTE,
+        _______    , LOCKPC    , _______,
      //├───────────┼───────────┼───────────┤
         _______    , _______   , _______
      //└───────────┴───────────┴───────────┘
@@ -63,182 +76,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 };
 
-void keyboard_post_init_user(void) {
-  // Read the user config from EEPROM
-  user_config.raw = eeconfig_read_user();
-  // Update light_timer to eeprom
-  light_timer = user_config.light_timer_config;
-}
-
-//lighting timeout
-void matrix_scan_user(void) {
-    if (idle_timer == 0) idle_timer = timer_read();
-    if ( led_on && timer_elapsed(idle_timer) > 30000) {
-        halfmin_counter++;
-        idle_timer = timer_read();
-    }
-    if (led_on && halfmin_counter >= LIGHT_TIMEOUT * 2) {
-        //rgb lighting
-        if(light_timer == true) {
-            rgblight_disable();
-        }
-        led_on = false;
-        halfmin_counter = 0;
-    }
-}
-
-void lighting_idle_wake(void) {
-    if (led_on == false || rgblight_is_enabled()) {
-        //rgb lighting
-        rgblight_enable();
-        led_on = true;
-    }
-    idle_timer = timer_read();
-    halfmin_counter = 0;
-}
-
-/* Encoder 
+/* RGB Change on Layer 
 */
-bool encoder_update_user(uint8_t index, bool clockwise) {
-    if(clockwise || !clockwise) lighting_idle_wake();
-	if(layer_state_is(_MEDIA)) { //layer MEDIA
-        if(index == 2) {
-            clockwise ? tap_code(KC_MPRV) : tap_code(KC_MNXT);
-        }
-	} else if (layer_state_is(_BASE)) { // layer BASE
-        if(index == 2) {
-            clockwise ? tap_code(KC_VOLD) : tap_code(KC_VOLU);
-        }
-	} else if (layer_state_is(_MOD)) { // layer MOD
-        if(index == 2) {
-            clockwise ? rgblight_decrease_val() : rgblight_increase_val();
-        }
-	} else if (layer_state_is(_RGB)) { // layer RGB
-        if(index == 2) {
-            clockwise ? rgblight_decrease_val() : rgblight_increase_val();
-        }
-	}
-    return true;
-}
-
-bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    if (record->event.pressed) lighting_idle_wake();
-    switch (keycode) {
-        case RGB_SWITCH:
-            if (record->event.pressed) {
-                if(light_timer) {
-                    light_timer = false;
-                    rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_MOD_SPIRAL_RED);
-                    user_config.light_timer_config = false;
-                    eeconfig_update_user(user_config.raw);
-                } else {
-                    light_timer = true;
-                    rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_MOD_SPIRAL_GREEN);
-                    user_config.light_timer_config = true;
-                    eeconfig_update_user(user_config.raw);
-                }
-            } else {
-            }
-            return false;
-            break;
-    	case AUDIO_OUT:
-    	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
-                register_code(KC_LALT);
-                tap_code(KC_S);
-            } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
-                unregister_code(KC_LALT);
-            }
-            return false;
-            break;
-	    case MIC_IN:
-    	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
-                register_code(KC_LALT);
-                tap_code(KC_V);
-            } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
-                unregister_code(KC_LALT);
-            }
-            return false;
-            break;
-        case MIC_MUTE:
-    	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LALT);
-                tap_code(KC_M);
-            } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LALT);
-            }
-            return false;
-            break;
-        case MIXER:
-    	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LALT);
-                tap_code(KC_N);
-            } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LALT);
-            }
-            return false;
-            break;
-        case CONNECT:
-    	    if (record->event.pressed) {
-                register_code(KC_LGUI);
-                tap_code(KC_K);
-            } else {
-                unregister_code(KC_LGUI);
-            }
-            return false;
-            break;
-        case TRIM:
-            if (record->event.pressed) {
-                register_code(KC_LGUI);
-                register_code(KC_LSHIFT);
-                tap_code(KC_S);
-            } else {
-                unregister_code(KC_LGUI);
-                unregister_code(KC_LSHIFT);
-            }
-            return false;
-            break;
-        case DC_MIC:
-            if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
-                register_code(KC_LALT);
-                tap_code(KC_U);
-            } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
-                unregister_code(KC_LALT);
-            }
-            return false;
-            break;
-	    case DC_STM:
-            if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
-                register_code(KC_LALT);
-                tap_code(KC_J);
-            } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
-                unregister_code(KC_LALT);
-            }
-            return false;
-            break;
-    }
-    return true;
-};
-
 uint8_t current;
 uint8_t prev;
 uint16_t mode;
@@ -251,19 +90,19 @@ void get_rgb(void) {
 	hue = rgblight_get_hue();
 	sat = rgblight_get_sat();
 	val = rgblight_get_val();
-    speed = rgblight_get_speed();
-    mode = rgblight_get_mode();
+   speed = rgblight_get_speed();
+   mode = rgblight_get_mode();
 }
 
 void reset_rgb(void) {
 	rgblight_sethsv(hue, sat, val);
-    rgblight_set_speed(speed);
-    rgblight_mode(mode);
+   rgblight_set_speed(speed);
+   rgblight_mode(mode);
 }
 
 void matrix_init_user() {
-	get_rgb();
-    rgblight_enable();
+	get_rgb(); // * init rgb from eeprom to current session 
+   rgblight_enable(); // * Will enable rgb on startup
 }
 
 void set_rgb(uint8_t h, uint8_t s, uint8_t v, uint8_t e, uint16_t m) {
@@ -276,7 +115,7 @@ void set_rgb(uint8_t h, uint8_t s, uint8_t v, uint8_t e, uint16_t m) {
     }
 }
 
-uint32_t layer_state_set_user(uint32_t state) {
+layer_state_t layer_state_set_user(layer_state_t state) {
     if(prev == _RGB) {
         get_rgb();
     }
@@ -305,11 +144,284 @@ uint32_t layer_state_set_user(uint32_t state) {
     return state;
 }
 
-// caps lock
+void refresh_rgb() {
+    printf("RGB keytimer %d\n", timer_elapsed(key_timer));
+    printf("RGB Timeout: %ld\n", light_timeout);
+    key_timer = timer_read(); // store time of last refresh
+    if (is_rgb_timeout && light_timer) { // only do something if rgb has timed out
+        rgblight_enable();
+        is_rgb_timeout = false;
+
+        if(biton32(layer_state) == _BASE) {
+            reset_rgb();
+        }
+    }
+}
+
+void check_rgb_timeout() {
+  if (!is_rgb_timeout && light_timer && timer_elapsed(key_timer) >= light_timeout) {
+   rgblight_disable_noeeprom();
+   is_rgb_timeout = true;
+  }
+}
+
+/* Runs at the end of each scan loop, check if RGB timeout has occured */
+void housekeeping_task_user(void) {
+   check_rgb_timeout();
+}
+
+
+uint32_t min_to_milli(uint16_t minutes) {
+   return minutes * 60000;
+}
+
+uint8_t milli_to_min(uint32_t milli) {
+   return milli / 60000;
+}
+
+/* Load eeprom
+ * Loads light time out state from eeprom 
+ */
+void keyboard_post_init_user(void) {
+   rgblight_enable();
+  // Read the user config from EEPROM
+  user_config.raw = eeconfig_read_user();
+  // Update light_timer to eeprom
+  light_timer = user_config.light_timer_config;
+  if(user_config.rgb_timeout_config == 0) {
+      user_config.rgb_timeout_config = milli_to_min(light_timeout);
+      eeconfig_update_user(user_config.raw);
+  }
+  light_timeout = min_to_milli(user_config.rgb_timeout_config);
+  
+   get_rgb();
+}
+
+/* Encoder 
+*/
+bool encoder_update_user(uint8_t index, bool clockwise) {
+    if(clockwise || !clockwise) refresh_rgb();
+    if(index == 2) {
+        switch(biton32(layer_state)) {
+            case _BASE:
+                clockwise ? tap_code(KC_VOLU) : tap_code(KC_VOLD);
+                break;
+            case _MOD:
+                clockwise ? rgblight_increase_val() : rgblight_decrease_val();
+                break;
+            case _MEDIA:
+                clockwise ? tap_code(KC_MNXT) : tap_code(KC_MPRV);
+                break;
+            case _RGB:
+                clockwise ? rgblight_increase_val() : rgblight_decrease_val();
+                break;
+            default:
+                return false;
+        }
+
+    }
+    return true;
+}
+
+//switch through rgb timouts
+void increase_rgb_timeout(void) {
+    uint8_t timeMinute = milli_to_min(light_timeout);
+    switch (timeMinute)
+    {
+    case 1:
+        light_timeout = min_to_milli(5);
+        break;
+    case 5:
+        light_timeout = min_to_milli(10);
+        break;
+    case 10:
+        light_timeout = min_to_milli(15);
+        break;
+    case 15:
+        light_timeout = min_to_milli(15);
+        break;
+    }
+    if(timeMinute != milli_to_min(light_timeout)) {
+        printf("RGB Timout Increased from: %d to %d \n", timeMinute, milli_to_min(light_timeout));
+        user_config.rgb_timeout_config = milli_to_min(light_timeout);
+        eeconfig_update_user(user_config.raw);
+    }
+}
+
+void decrease_rgb_timeout(void) {
+    uint8_t timeMinute = milli_to_min(light_timeout);
+    switch (timeMinute)
+    {
+    case 15:
+        light_timeout = min_to_milli(10);
+        break;
+    case 10:
+        light_timeout = min_to_milli(5);
+        break;
+    case 5:
+        light_timeout = min_to_milli(1);
+        break;
+    case 1:
+        light_timeout = min_to_milli(1);
+        break;
+    }
+    if(timeMinute != milli_to_min(light_timeout)) {
+        printf("RGB Timout Decreased from: %d to %d \n", timeMinute, milli_to_min(light_timeout));
+        user_config.rgb_timeout_config = milli_to_min(light_timeout);
+        eeconfig_update_user(user_config.raw);
+    }
+
+}
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed) refresh_rgb();
+    switch (keycode) {
+        case RGB_SWITCH:
+            if (record->event.pressed) {
+                if(light_timer) {
+                    light_timer = false;
+                    rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_MOD_SPIRAL_RED);
+                    user_config.light_timer_config = false;
+                    eeconfig_update_user(user_config.raw); // * Saves light time out config to eeprom
+                    print("RGB Timeout: OFF\n");
+                } else {
+                    light_timer = true;
+                    rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_MOD_SPIRAL_GREEN);             
+                    user_config.light_timer_config = true;
+                    eeconfig_update_user(user_config.raw); // * Saves light time out config to eeprom
+                    print("RGB Timeout: ON\n");
+                }
+            }
+            return true;
+            break;
+        case RGB_PLUS:
+    	    if (record->event.pressed) {
+                increase_rgb_timeout();
+            }
+            return true;
+            break;
+        case RGB_MINUS:
+    	    if (record->event.pressed) {
+                decrease_rgb_timeout();
+            }
+            return true;
+            break;
+        case LOCKPC:
+            if (record->event.pressed) {
+                register_code(KC_LGUI);
+                register_code(KC_L);
+            } else {
+                unregister_code(KC_LGUI);
+                unregister_code(KC_L);
+                rgblight_disable_noeeprom();
+                is_rgb_timeout = true;
+            }
+            return true;
+            break;
+    	case AUDIO_OUT:
+    	    if (record->event.pressed) {
+                register_code(KC_LCTRL);
+                register_code(KC_LSHIFT);
+                register_code(KC_LALT);
+                tap_code(KC_S);
+            } else {
+                unregister_code(KC_LCTRL);
+                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LALT);
+            }
+            return true;
+            break;
+	    case MIC_IN:
+    	    if (record->event.pressed) {
+                register_code(KC_LCTRL);
+                register_code(KC_LSHIFT);
+                register_code(KC_LALT);
+                tap_code(KC_V);
+            } else {
+                unregister_code(KC_LCTRL);
+                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LALT);
+            }
+            return true;
+            break;
+        case MIC_MUTE:
+    	    if (record->event.pressed) {
+                register_code(KC_LCTRL);
+                register_code(KC_LALT);
+                tap_code(KC_M);
+            } else {
+                unregister_code(KC_LCTRL);
+                unregister_code(KC_LALT);
+            }
+            return true;
+            break;
+        case MIXER:
+    	    if (record->event.pressed) {
+                register_code(KC_LCTRL);
+                register_code(KC_LALT);
+                tap_code(KC_N);
+            } else {
+                unregister_code(KC_LCTRL);
+                unregister_code(KC_LALT);
+            }
+            return true;
+            break;
+        case CONNECT:
+    	    if (record->event.pressed) {
+                register_code(KC_LGUI);
+                tap_code(KC_K);
+            } else {
+                unregister_code(KC_LGUI);
+            }
+            return true;
+            break;
+        case TRIM:
+            if (record->event.pressed) {
+                register_code(KC_LGUI);
+                register_code(KC_LSHIFT);
+                tap_code(KC_S);
+            } else {
+                unregister_code(KC_LGUI);
+                unregister_code(KC_LSHIFT);
+            }
+            return true;
+            break;
+        case DC_MIC:
+            if (record->event.pressed) {
+                register_code(KC_LCTRL);
+                register_code(KC_LSHIFT);
+                register_code(KC_LALT);
+                tap_code(KC_U);
+            } else {
+                unregister_code(KC_LCTRL);
+                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LALT);
+            }
+            return true;
+            break;
+	    case DC_STM:
+            if (record->event.pressed) {
+                register_code(KC_LCTRL);
+                register_code(KC_LSHIFT);
+                register_code(KC_LALT);
+                tap_code(KC_J);
+            } else {
+                unregister_code(KC_LCTRL);
+                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LALT);
+            }
+            return true;
+            break;
+    }
+    return true;
+};
+
+// Will trigger Caps lock RGB, only on base layer
 void led_set_user(uint8_t usb_led) {
    if ((current == _BASE) && (usb_led & (1<<USB_LED_CAPS_LOCK))) {
-       rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_MOD_SPIRAL_RED);
-   } else if(current == _BASE) {
-       reset_rgb();
+      rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_MOD_SPIRAL_RED); 
+      refresh_rgb();
+   } else if(current == _BASE) { // * Cap lock indicator will only show on base layer
+      reset_rgb();
    }
 }

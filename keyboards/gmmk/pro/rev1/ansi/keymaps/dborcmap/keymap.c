@@ -16,17 +16,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include QMK_KEYBOARD_H
 
-static uint32_t light_timeout = 60000; // 5 minutes
-static uint16_t key_timer;
+static uint32_t light_timeout = 300000; // 5 minutes
+static uint32_t key_timer; // timer for the key
 static void refresh_rgb(void); // refreshes the activity timer and RGB, invoke whenever activity happens
 static void check_rgb_timeout(void); // checks if enough time has passed for RGB to timeout
-bool is_rgb_timeout = false; // store if RGB has timed out or not in a boolean
+static bool is_rgb_timeout = false; // store if RGB has timed out or not in a boolean
 static bool light_timer = true; // store if light timer is enabled or not in a boolean
 
 
 enum custom_keycodes {
    RGB_SWITCH = SAFE_RANGE, 
    LOCKPC,
+   RIGHT_CLK,
    RGB_one_min, 
    RGB_five_min, 
    RGB_ten_min, 
@@ -34,13 +35,14 @@ enum custom_keycodes {
 };
 
 enum layer_names {
-    _BASE, _FUNC, _RGB
+    _BASE, _FUNC, _RGB, _XL
 };
 
 typedef union {
   uint32_t raw;
   struct {
     bool     light_timer_config :1;
+    uint8_t  rgb_timeout_config :5;
   };
 } user_config_t;
 
@@ -73,7 +75,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
     [_FUNC] = LAYOUT(
       //┌────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
-       RGB_SWITCH, KC_MYCM , KC_WSCH , KC_CALC , KC_MSEL , KC_MPRV , KC_MNXT , KC_MPLY , KC_MSTP , KC_VOLD , KC_VOLU , KC_PSCR , KC_SLCK , KC_INS ,            TO(_RGB),
+       RGB_SWITCH, TO(_XL) , KC_WSCH , KC_CALC , KC_MSEL , KC_MPRV , KC_MNXT , KC_MPLY , KC_MSTP , KC_VOLD , KC_VOLU , KC_PSCR , KC_SLCK , KC_INS ,            TO(_RGB),
       //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
          EE_CLR  , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______,    RGB_fifteen_min ,
       //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
@@ -98,9 +100,24 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
       //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
          _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ ,                     _______ , _______ ,
       //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
-         _______ , _______ , _______ ,                          _______,                           _______ , _______ , _______ ,           _______ , _______ , _______ 
+         _______ , _______ , _______ ,                          _______,                           _______ , TO(_BASE), _______ ,           _______ , _______ , _______ 
       //└────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┘
     ),
+    [_XL] = LAYOUT(
+      //┌────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
+         KC_ESC  ,RIGHT_CLK, KC_F2  , KC_F3   , KC_F4   , KC_F5   , KC_F6   , KC_F7   , KC_F8   , KC_F9   , KC_F10  , KC_F11  , KC_F12  ,KC_DELETE,LT(_BASE, KC_MPLY),
+      //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+         KC_GRV  , KC_1    , KC_2    , KC_3    , KC_4    , KC_5    , KC_6    , KC_7    , KC_8    , KC_9    , KC_0    , KC_MINS , KC_EQL  , KC_BSPC ,           KC_HOME ,
+      //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+         KC_TAB  , KC_Q    , KC_W    , KC_E    , KC_R    , KC_T    , KC_Y    , KC_U    , KC_I    , KC_O    , KC_P    , KC_LBRC , KC_RBRC , KC_BSLS ,           KC_END  ,
+      //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+         KC_CAPS , KC_A    , KC_S    , KC_D    , KC_F    , KC_G    , KC_H    , KC_J    , KC_K    , KC_L    , KC_SCLN , KC_QUOT , KC_ENT  ,                     KC_PGUP ,
+      //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+         KC_LSFT , KC_Z    , KC_X    , KC_C    , KC_V    , KC_B    , KC_N    , KC_M    , KC_COMM , KC_DOT  , KC_SLSH , KC_RSFT ,                     KC_UP   , KC_PGDN ,
+      //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+         KC_LCTL , KC_LGUI , KC_LALT,                           KC_SPC,                            KC_RALT ,TO(_FUNC), KC_RCTL ,           KC_LEFT , KC_DOWN , KC_RGHT
+      //└────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┴─────────┘
+    )
 };
 
 /* RGB Change on Layer 
@@ -149,8 +166,9 @@ layer_state_t layer_state_set_user(layer_state_t state) {
    current = biton32(state);
 	switch (current) {
 		case _BASE:
+      case _XL:
          // ! To prevent reset before layers are initalized, load rgb from eeprom will not work otherwise
-		   if(prev == _FUNC || prev == _RGB) {  
+		   if(prev == _FUNC || prev == _RGB || prev == _XL) {
             reset_rgb();
          }
 		   break;
@@ -195,6 +213,15 @@ void housekeeping_task_user(void) {
    check_rgb_timeout();
 }
 
+
+uint32_t min_to_milli(uint16_t minutes) {
+   return minutes * 60000;
+}
+
+uint8_t milli_to_min(uint32_t milli) {
+   return milli / 60000;
+}
+
 /* Load eeprom
  * Loads light time out state from eeprom 
  */
@@ -204,6 +231,11 @@ void keyboard_post_init_user(void) {
   user_config.raw = eeconfig_read_user();
   // Update light_timer to eeprom
   light_timer = user_config.light_timer_config;
+  if(user_config.rgb_timeout_config == 0) {
+      user_config.rgb_timeout_config = milli_to_min(light_timeout);
+      eeconfig_update_user(user_config.raw);
+  }
+  light_timeout = min_to_milli(user_config.rgb_timeout_config);
    get_rgb();
 }
 
@@ -250,6 +282,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
          }
          return true;
       break;
+      case RIGHT_CLK:
+         if (record->event.pressed) {
+            register_code(KC_LEFT_SHIFT);
+            register_code(KC_F10);
+         } else {
+            unregister_code(KC_LEFT_SHIFT);
+            unregister_code(KC_F10);
+         }
+         return true;
+      break;
       case LOCKPC:
          if (record->event.pressed) {
             register_code(KC_LGUI);
@@ -265,24 +307,32 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       case RGB_one_min:
          if (record->event.pressed) {
             light_timeout = 60000;
+            user_config.rgb_timeout_config = milli_to_min(60000);
+            eeconfig_update_user(user_config.raw); // * Saves light time out config to eeprom
          } 
          return true;
       break;
       case RGB_five_min:
          if (record->event.pressed) {
             light_timeout = 300000;
+            user_config.rgb_timeout_config = milli_to_min(300000);
+            eeconfig_update_user(user_config.raw); // * Saves light time out config to eeprom
          } 
          return true;
       break;
       case RGB_ten_min:
          if (record->event.pressed) {
             light_timeout = 600000;
+            user_config.rgb_timeout_config = milli_to_min(600000);
+            eeconfig_update_user(user_config.raw); // * Saves light time out config to eeprom
          } 
          return true;
       break;
       case RGB_fifteen_min:
          if (record->event.pressed) {
             light_timeout = 900000;
+            user_config.rgb_timeout_config = milli_to_min(900000);
+            eeconfig_update_user(user_config.raw); // * Saves light time out config to eeprom
          } 
          return true;
       break;
