@@ -15,6 +15,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include QMK_KEYBOARD_H
+#include <stdio.h>
 
 static uint32_t light_timeout = 300000; // 5 minutes
 static uint32_t key_timer; // timer for the key
@@ -48,6 +49,8 @@ typedef union {
 
 user_config_t user_config;
 
+#define CL_EEPROM LGUI(QK_CLEAR_EEPROM)
+
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 //      ESC      F1       F2       F3       F4       F5       F6       F7       F8       F9       F10      F11      F12	     Del       Volume.up/dn(Tap-Pause, Hold-prev/next)
@@ -75,7 +78,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
     [_FUNC] = LAYOUT(
       //┌────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
-       RGB_SWITCH, TO(_XL) , KC_WSCH , KC_CALC , KC_MSEL , KC_MPRV , KC_MNXT , KC_MPLY , KC_MSTP , KC_VOLD , KC_VOLU , KC_PSCR , KC_SLCK , KC_INS ,            TO(_RGB),
+       RGB_SWITCH, TO(_XL) , KC_WSCH , KC_CALC , KC_MSEL , KC_MPRV , KC_MNXT , KC_MPLY , KC_MSTP , KC_VOLD , KC_VOLU , KC_PSCR , KC_SCRL , KC_INSERT,          TO(_RGB),
       //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
          EE_CLR  , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______ , _______,    RGB_fifteen_min ,
       //├────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
@@ -190,6 +193,9 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 void refresh_rgb() {
   key_timer = timer_read(); // store time of last refresh
+  //print 
+  dprintf("is_rgb_timeout: %d | light_timer: %d", is_rgb_timeout, light_timer);
+
   if (is_rgb_timeout && light_timer) { // only do something if rgb has timed out
     is_rgb_timeout = false;
     rgblight_enable();
@@ -227,16 +233,20 @@ uint8_t milli_to_min(uint32_t milli) {
  */
 void keyboard_post_init_user(void) {
    rgblight_enable();
-  // Read the user config from EEPROM
-  user_config.raw = eeconfig_read_user();
-  // Update light_timer to eeprom
-  light_timer = user_config.light_timer_config;
-  if(user_config.rgb_timeout_config == 0) {
+   debug_enable=true;
+   debug_matrix=true;
+   // Read the user config from EEPROM
+   user_config.raw = eeconfig_read_user();
+   // Update light_timer to eeprom
+   // If light_timer eeprom is not set
+   if(user_config.rgb_timeout_config == 0) {
       user_config.rgb_timeout_config = milli_to_min(light_timeout);
+      user_config.light_timer_config = true;
       eeconfig_update_user(user_config.raw);
-  }
-  light_timeout = min_to_milli(user_config.rgb_timeout_config);
-   get_rgb();
+   }
+   light_timer = user_config.light_timer_config;
+   light_timeout = min_to_milli(user_config.rgb_timeout_config);
+   get_rgb(); 
 }
 
 
@@ -281,7 +291,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
          }
          return true;
-      break;
+         break;
       case RIGHT_CLK:
          if (record->event.pressed) {
             register_code(KC_LEFT_SHIFT);
@@ -291,7 +301,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             unregister_code(KC_F10);
          }
          return true;
-      break;
+         break;
       case LOCKPC:
          if (record->event.pressed) {
             register_code(KC_LGUI);
@@ -303,7 +313,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             is_rgb_timeout = true;
          }
          return true;
-      break;
+         break;
       case RGB_one_min:
          if (record->event.pressed) {
             light_timeout = 60000;

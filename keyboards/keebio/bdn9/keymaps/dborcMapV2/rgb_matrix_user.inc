@@ -22,7 +22,7 @@ RGB_MATRIX_EFFECT(MOD_SPIRAL_RED)
         for (uint8_t i = 9; i < 11; i++) {
             rgb_matrix_set_color(i, RGB_WHITE);
         }
-        return led_max < DRIVER_LED_TOTAL;
+        return led_max < RGB_MATRIX_LED_COUNT;
     }
 
     bool MEDIA_BREATHING_WHITE(effect_params_t* params) {
@@ -37,7 +37,7 @@ RGB_MATRIX_EFFECT(MOD_SPIRAL_RED)
             RGB_MATRIX_TEST_LED_FLAGS();
             rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
         }
-        return led_max < DRIVER_LED_TOTAL;
+        return led_max < RGB_MATRIX_LED_COUNT;
     }
 
     typedef HSV (*dx_dy_dist_f)(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint8_t time);
@@ -53,7 +53,7 @@ RGB_MATRIX_EFFECT(MOD_SPIRAL_RED)
             RGB     rgb  = rgb_matrix_hsv_to_rgb(effect_func(rgb_matrix_config.hsv, dx, dy, dist, time));
             rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
         }
-        return led_max < DRIVER_LED_TOTAL;
+        return led_max < RGB_MATRIX_LED_COUNT;
     }
 
     static HSV MOD_SPIRAL_GREEN_math(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint8_t time) {

@@ -183,18 +183,19 @@ uint8_t milli_to_min(uint32_t milli) {
  * Loads light time out state from eeprom 
  */
 void keyboard_post_init_user(void) {
-   rgblight_enable();
-  // Read the user config from EEPROM
-  user_config.raw = eeconfig_read_user();
-  // Update light_timer to eeprom
-  light_timer = user_config.light_timer_config;
-  if(user_config.rgb_timeout_config == 0) {
-      user_config.rgb_timeout_config = milli_to_min(light_timeout);
-      eeconfig_update_user(user_config.raw);
-  }
-  light_timeout = min_to_milli(user_config.rgb_timeout_config);
-  
-   get_rgb();
+    rgblight_enable();
+    // Read the user config from EEPROM
+    user_config.raw = eeconfig_read_user();
+    // Update light_timer to eeprom
+    // If light_timer eeprom is not set
+    if(user_config.rgb_timeout_config == 0) {
+        user_config.rgb_timeout_config = milli_to_min(light_timeout);
+        user_config.light_timer_config = true;
+        eeconfig_update_user(user_config.raw);
+    }
+    light_timer = user_config.light_timer_config;
+    light_timeout = min_to_milli(user_config.rgb_timeout_config);
+    get_rgb(); 
 }
 
 /* Encoder 
@@ -204,23 +205,28 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
     if(index == 2) {
         switch(biton32(layer_state)) {
             case _BASE:
-                clockwise ? tap_code(KC_VOLU) : tap_code(KC_VOLD);
+                clockwise ? tap_code(KC_VOLD) : tap_code(KC_VOLU);
+                return false;
                 break;
             case _MOD:
-                clockwise ? rgblight_increase_val() : rgblight_decrease_val();
+                clockwise ? rgblight_decrease_val() : rgblight_increase_val();
+                return false;
                 break;
             case _MEDIA:
-                clockwise ? tap_code(KC_MNXT) : tap_code(KC_MPRV);
+                clockwise ? tap_code(KC_MPRV) : tap_code(KC_MNXT);
+                return false;
                 break;
             case _RGB:
-                clockwise ? rgblight_increase_val() : rgblight_decrease_val();
+                clockwise ? rgblight_decrease_val() : rgblight_increase_val();
+                return false;
                 break;
             default:
-                return false;
+                return true;
         }
 
     }
     return true;
+    
 }
 
 //switch through rgb timouts
@@ -320,48 +326,48 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             break;
     	case AUDIO_OUT:
     	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
+                register_code(KC_LCTL);
+                register_code(KC_LSFT);
                 register_code(KC_LALT);
                 tap_code(KC_S);
             } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LCTL);
+                unregister_code(KC_LSFT);
                 unregister_code(KC_LALT);
             }
             return true;
             break;
 	    case MIC_IN:
     	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
+                register_code(KC_LCTL);
+                register_code(KC_LSFT);
                 register_code(KC_LALT);
                 tap_code(KC_V);
             } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LCTL);
+                unregister_code(KC_LSFT);
                 unregister_code(KC_LALT);
             }
             return true;
             break;
         case MIC_MUTE:
     	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
+                register_code(KC_LCTL);
                 register_code(KC_LALT);
                 tap_code(KC_M);
             } else {
-                unregister_code(KC_LCTRL);
+                unregister_code(KC_LCTL);
                 unregister_code(KC_LALT);
             }
             return true;
             break;
         case MIXER:
     	    if (record->event.pressed) {
-                register_code(KC_LCTRL);
+                register_code(KC_LCTL);
                 register_code(KC_LALT);
                 tap_code(KC_N);
             } else {
-                unregister_code(KC_LCTRL);
+                unregister_code(KC_LCTL);
                 unregister_code(KC_LALT);
             }
             return true;
@@ -378,36 +384,36 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case TRIM:
             if (record->event.pressed) {
                 register_code(KC_LGUI);
-                register_code(KC_LSHIFT);
+                register_code(KC_LSFT);
                 tap_code(KC_S);
             } else {
                 unregister_code(KC_LGUI);
-                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LSFT);
             }
             return true;
             break;
         case DC_MIC:
             if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
+                register_code(KC_LCTL);
+                register_code(KC_LSFT);
                 register_code(KC_LALT);
                 tap_code(KC_U);
             } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LCTL);
+                unregister_code(KC_LSFT);
                 unregister_code(KC_LALT);
             }
             return true;
             break;
 	    case DC_STM:
             if (record->event.pressed) {
-                register_code(KC_LCTRL);
-                register_code(KC_LSHIFT);
+                register_code(KC_LCTL);
+                register_code(KC_LSFT);
                 register_code(KC_LALT);
                 tap_code(KC_J);
             } else {
-                unregister_code(KC_LCTRL);
-                unregister_code(KC_LSHIFT);
+                unregister_code(KC_LCTL);
+                unregister_code(KC_LSFT);
                 unregister_code(KC_LALT);
             }
             return true;
